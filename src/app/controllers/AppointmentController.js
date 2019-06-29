@@ -7,7 +7,8 @@ import Appointment from '../models/Appointment';
 import File from '../models/File';
 import Notification from '../schemas/Notification';
 
-import Mail from '../../lib/Mail';
+import CancellationMail from '../jobs/CancellationMail';
+import Queue from '../../lib/Queue';
 
 class AppointmentController {
   async index(req, res) {
@@ -133,6 +134,11 @@ class AppointmentController {
           as: 'provider',
           attributes: ['name', 'email'],
         },
+        {
+          model: User,
+          as: 'user',
+          attributes: ['name'],
+        },
       ],
     });
 
@@ -156,14 +162,21 @@ class AppointmentController {
       });
     }
 
+    /**
+     * Se já foi cancelado não permite cancelar novamente
+     */
+    // if (appointment.canceled_at) {
+    //   return res
+    //     .status(401)
+    //     .json({ error: 'This appointment already cancelled' });
+    // }
+
     appointment.canceled_at = new Date();
 
     await appointment.save();
 
-    await Mail.sendMail({
-      to: `${appointment.provider.name} <${appointment.provider.email}>`,
-      subject: 'Agendamento cancelado',
-      text: 'Você tem um cancelamento',
+    await Queue.add(CancellationMail.key, {
+      appointment,
     });
 
     return res.json(appointment);
